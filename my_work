@@ -1,0 +1,111 @@
+import os
+import pandas as pd
+import numpy as np
+import time
+import psutil
+import platform
+from datetime import datetime
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+class DataManagerSystem:
+    def _init_(self, directory=None):
+        self.directory = directory if directory else os.getcwd()
+        self.current_df = None
+        self.file_history = []
+
+    def list_files(self):
+        try:
+            return [f for f in os.listdir(self.directory) if f.endswith('.csv')] or ["No CSV files found"]
+        except Exception as e:
+            print(f"Error listing files: {e}")
+            return ["Error listing files"]
+
+    def load_data(self, filename):
+        try:
+            print(f"Loading {filename}...")
+            time.sleep(1)  # Simulate processing time
+            df = pd.read_csv(os.path.join(self.directory, filename))
+            print(f"Successfully loaded {filename} ({len(df)} rows)")
+            self.current_df = df
+            self.file_history.append({'timestamp': datetime.now(), 'filename': filename, 'action': 'load'})
+            return df
+        except Exception as e:
+            print(f"Error loading {filename}: {e}")
+            return None
+
+    def clean_data(self, df):
+        try:
+            print("Cleaning data...")
+            num_cols = df.select_dtypes(include=[np.number]).columns
+            cat_cols = df.select_dtypes(include=['object']).columns
+
+            if not num_cols.empty:
+                df[num_cols] = df[num_cols].fillna(df[num_cols].mean())
+            if not cat_cols.empty:
+                df[cat_cols] = df[cat_cols].fillna(df[cat_cols].mode().iloc[0])
+            
+            initial_rows = len(df)
+            df.drop_duplicates(inplace=True)
+            print(f"Removed {initial_rows - len(df)} duplicate rows")
+            return df
+        except Exception as e:
+            print(f"Data cleaning failed: {e}")
+            return df
+
+    def analyze_data(self, df):
+        print("Generating data analysis...")
+        print("Basic Statistics:")
+        print(df.describe())
+
+        missing = df.isnull().sum()
+        print("Missing Values:")
+        print(missing if missing.sum() > 0 else "No missing values found!")
+
+        numeric_df = df.select_dtypes(include=[np.number])
+        if not numeric_df.empty:
+            print("Generating correlation heatmap...")
+            sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", center=0)
+            plt.title("Feature Correlation Heatmap")
+            plt.show()
+
+    def save_data(self, df, filename):
+        try:
+            filepath = os.path.join(self.directory, filename)
+            df.to_csv(filepath, index=False)
+            print(f"Data saved successfully to {filename}")
+            self.file_history.append({'timestamp': datetime.now(), 'filename': filename, 'action': 'save'})
+        except Exception as e:
+            print(f"Error saving file: {e}")
+
+    def get_system_info(self):
+        print("System Information:")
+        sys_info = {
+            "System": platform.system(),
+            "Node Name": platform.node(),
+            "Release": platform.release(),
+            "Version": platform.version(),
+            "Machine": platform.machine(),
+            "Processor": platform.processor(),
+            "Python Version": platform.python_version(),
+        }
+        for key, value in sys_info.items():
+            print(f"{key}: {value}")
+
+        mem = psutil.virtual_memory()
+        print(f"Total Memory: {mem.total / 1e9:.2f} GB")
+        print(f"Available Memory: {mem.available / 1e9:.2f} GB")
+        print(f"Used Memory: {mem.used / 1e9:.2f} GB ({mem.percent}%)")
+        print(f"CPU Usage: {psutil.cpu_percent()}%")
+
+if _name_ == "_main_":
+    manager = DataManagerSystem()
+    print("Available datasets:", manager.list_files())
+    filename = input("Enter dataset filename to load: ")
+    df = manager.load_data(filename)
+    if df is not None:
+        df = manager.clean_data(df)
+        manager.analyze_data(df)
+        if input("Save cleaned dataset? (yes/no): ").strip().lower() == 'yes':
+            manager.save_data(df, "cleaned_" + filename)
+    manager.get_system_info()
